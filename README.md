@@ -6,6 +6,8 @@ Targeted toward Digilent Basys3. Make sure to install the [board files](https://
 
 Tested on Windows 11.
 
+Document Statement: Worked with Dustin Mock on the implementation for the advanced code and Ethan Chapman helped talk through the basics of abstraction for basic implementation.
+
 ---
 
 ## Build the project

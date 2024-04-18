@@ -91,6 +91,27 @@ end top_basys3;
 
 architecture top_basys3_arch of top_basys3 is 
   
+    component TDM4 is 
+    generic ( constant k_WIDTH : natural  := 4); -- bits in input and output
+        Port ( i_clk        : in  STD_LOGIC;
+               i_reset        : in  STD_LOGIC; -- asynchronous
+               i_D3         : in  STD_LOGIC_VECTOR (k_WIDTH - 1 downto 0);
+               i_D2         : in  STD_LOGIC_VECTOR (k_WIDTH - 1 downto 0);
+               i_D1         : in  STD_LOGIC_VECTOR (k_WIDTH - 1 downto 0);
+               i_D0         : in  STD_LOGIC_VECTOR (k_WIDTH - 1 downto 0);
+               o_data        : out STD_LOGIC_VECTOR (k_WIDTH - 1 downto 0);
+               o_sel        : out STD_LOGIC_VECTOR (3 downto 0)    -- selected data line (one-cold)
+        );
+    end component TDM4;
+    
+    component x2d is
+        port ( i_hex : in STD_LOGIC_VECTOR (3 downto 0);
+               o_tens : out STD_LOGIC_VECTOR (3 downto 0);
+               o_ones : out STD_LOGIC_VECTOR (3 downto 0)
+             );
+    end component x2d;
+
+   
   
 	-- declare components and signals
 	 component clock_divider is
@@ -120,22 +141,37 @@ architecture top_basys3_arch of top_basys3 is
        end component sevenSegDecoder;
 	
 	
-    signal w_clk : std_logic;
-    signal w_floor : std_logic_vector(3 downto 0);
+   signal w_fast_clk, w_slow_clk : std_logic;
+   signal w_tens, w_ones, w_data, w_anode, w_floor : std_logic_vector(3 downto 0);
 
 begin
     -- Instantiate the clock divider
-    clock_divider_Inst: clock_divider
-    generic map ( k_DIV => 50000000 )
+    clock_divider_slow: clock_divider
+    generic map ( k_DIV => 25000000 )
     port map(
         i_reset => btnL or btnU,
         i_clk => clk,
-        o_clk => w_clk
+        o_clk => w_slow_clk
+    );
+    
+    clock_divider_fast: clock_divider
+    generic map ( k_DIV => 125000 )
+    port map (                          
+         i_clk   => clk,
+         i_reset => btnL or btnU,
+         o_clk   => w_fast_clk
+     ); 
+
+    x2d_inst: x2d
+    port map(
+        i_hex => w_floor,
+        o_tens => w_tens,
+        o_ones => w_ones
     );
 
     -- Instantiate the FSM
     fsm: elevator_controller_fsm port map(
-        i_clk    => w_clk,
+        i_clk    => w_slow_clk,
         i_reset  => btnR or btnU,
         i_up_down=> sw(1),
         i_stop   => sw(0),
@@ -144,23 +180,29 @@ begin
 
     -- Instantiate the 7-segment decoder
     seg_decoder: sevenSegDecoder port map(
-        i_D     => w_floor,
+        i_D     => w_data,
         o_S     => seg
     );
+    
+    TDM4_inst : TDM4
+     generic map ( k_WIDTH => 4 ) 
+     port map (
+            i_clk   => w_fast_clk,
+            i_reset => btnU,
+            i_D3    => w_tens,
+            i_D2    => w_ones,
+            i_D1    => x"A",
+            i_D0    => x"B",
+            o_data  => w_data,
+            o_sel   => w_anode
+     );
 
     -- LED and 7-segment display anodes control (assuming additional functionality)
     -- Add code here to drive the `led` and `an` signals based on the design requirements.
   
-    -- Ground unused LEDs if necessary
-    led <= (
-           15 => w_clk,
-           11 => w_floor(0),
-           12 => w_floor(1),
-           13 => w_floor(2),
-           14 => w_floor(3),
-           others => '0' 
-           );
-    -- Control the 7-segment display anodes (assuming one display)
-    an <= "1011"; -- Activates only the first 7-segment display (AN0)
-
+    -- LED 15 gets the FSM slow clock signal. The rest are grounded.
+        led(15) <= w_slow_clk;
+        led(14 downto 0) <= (others => '0');
+        an(3 downto 2) <= w_anode(3 downto 2);
+        an(1 downto 0) <= "11";
 end top_basys3_arch;
