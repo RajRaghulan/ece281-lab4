@@ -91,22 +91,76 @@ end top_basys3;
 
 architecture top_basys3_arch of top_basys3 is 
   
-	-- declare components and signals
-
   
+	-- declare components and signals
+	 component clock_divider is
+           generic ( constant k_DIV : natural := 2  );
+           port (
+               i_clk   : in std_logic;
+               i_reset : in std_logic;
+               o_clk   : out std_logic
+           );
+       end component clock_divider;
+       
+       component elevator_controller_fsm is
+           port (
+               i_clk     : in std_logic;
+               i_reset   : in std_logic;
+               i_up_down : in std_logic;
+               i_stop    : in std_logic;
+               o_floor   : out std_logic_vector(3 downto 0)
+           );
+       end component elevator_controller_fsm;
+       
+       component sevenSegDecoder is
+           port (
+               i_D   : in std_logic_vector(3 downto 0);
+               o_S   : out std_logic_vector(6 downto 0)
+           );
+       end component sevenSegDecoder;
+	
+	
+    signal w_clk : std_logic;
+    signal w_floor : std_logic_vector(3 downto 0);
+
 begin
-	-- PORT MAPS ----------------------------------------
+    -- Instantiate the clock divider
+    clock_divider_Inst: clock_divider
+    generic map ( k_DIV => 50000000 )
+    port map(
+        i_reset => btnL or btnU,
+        i_clk => clk,
+        o_clk => w_clk
+    );
 
-	
-	
-	-- CONCURRENT STATEMENTS ----------------------------
-	
-	-- LED 15 gets the FSM slow clock signal. The rest are grounded.
-	
+    -- Instantiate the FSM
+    fsm: elevator_controller_fsm port map(
+        i_clk    => w_clk,
+        i_reset  => btnR or btnU,
+        i_up_down=> sw(1),
+        i_stop   => sw(0),
+        o_floor  => w_floor
+    );
 
-	-- leave unused switches UNCONNECTED. Ignore any warnings this causes.
-	
-	-- wire up active-low 7SD anodes (an) as required
-	-- Tie any unused anodes to power ('1') to keep them off
-	
+    -- Instantiate the 7-segment decoder
+    seg_decoder: sevenSegDecoder port map(
+        i_D     => w_floor,
+        o_S     => seg
+    );
+
+    -- LED and 7-segment display anodes control (assuming additional functionality)
+    -- Add code here to drive the `led` and `an` signals based on the design requirements.
+  
+    -- Ground unused LEDs if necessary
+    led <= (
+           15 => w_clk,
+           11 => w_floor(0),
+           12 => w_floor(1),
+           13 => w_floor(2),
+           14 => w_floor(3),
+           others => '0' 
+           );
+    -- Control the 7-segment display anodes (assuming one display)
+    an <= "1011"; -- Activates only the first 7-segment display (AN0)
+
 end top_basys3_arch;
